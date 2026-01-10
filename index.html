@@ -1,0 +1,1320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Color Wars Online</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        :root { --primary: #e94560; --bg: #1a1a2e; --panel: #16213e; }
+        body { 
+            background: var(--bg); 
+            color: white; 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif; 
+            margin: 0; 
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        .container {
+            display: flex;
+            height: 100vh;
+            width: 100vw;
+        }
+        
+        .left-panel {
+            flex: 3;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            overflow-y: auto;
+            min-width: 0;
+        }
+        
+        .right-panel {
+            flex: 1;
+            min-width: 300px;
+            max-width: 350px;
+            background: var(--panel);
+            display: flex;
+            flex-direction: column;
+            border-left: 2px solid #0f3460;
+        }
+        
+        #lobby { 
+            background: var(--panel); 
+            padding: 30px; 
+            border-radius: 16px; 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.4); 
+            text-align: center; 
+            width: 100%;
+            max-width: 400px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        input { 
+            display: block; 
+            width: 100%; 
+            margin: 12px 0; 
+            padding: 14px; 
+            border-radius: 10px; 
+            border: 2px solid #0f3460; 
+            background: rgba(26, 26, 46, 0.8); 
+            color: white; 
+            font-size: 16px; 
+            box-sizing: border-box;
+            transition: all 0.3s;
+        }
+        
+        input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(233, 69, 96, 0.2);
+        }
+        
+        .join-btn { 
+            width: 100%; 
+            padding: 16px; 
+            background: linear-gradient(135deg, var(--primary), #ff2e63); 
+            color: white; 
+            border: none; 
+            border-radius: 10px; 
+            cursor: pointer; 
+            font-weight: bold; 
+            font-size: 18px; 
+            transition: all 0.3s; 
+            margin-top: 10px;
+            letter-spacing: 1px;
+        }
+        
+        .join-btn:hover { 
+            transform: translateY(-3px);
+            box-shadow: 0 10px 20px rgba(233, 69, 96, 0.3);
+        }
+        
+        .join-btn:active {
+            transform: translateY(-1px);
+        }
+        
+        .join-btn:disabled {
+            background: #666;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .player-count-selector { 
+            margin: 20px 0; 
+        }
+        
+        .player-count-label { 
+            display: block; 
+            margin-bottom: 12px; 
+            font-weight: 600; 
+            color: #8a9bb2;
+        }
+        
+        .player-count-options { 
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+        }
+        
+        .player-count-btn { 
+            padding: 12px; 
+            background: #0f3460; 
+            color: white; 
+            border: 2px solid #0f3460; 
+            border-radius: 8px; 
+            cursor: pointer; 
+            transition: all 0.3s; 
+            font-weight: 600;
+            font-size: 14px;
+        }
+        
+        .player-count-btn:hover { 
+            background: #1a4a8a; 
+            transform: translateY(-2px);
+        }
+        
+        .player-count-btn.active { 
+            background: var(--primary); 
+            border-color: var(--primary);
+            box-shadow: 0 5px 15px rgba(233, 69, 96, 0.3);
+        }
+
+        #game-container { 
+            display: none; 
+            text-align: center; 
+            animation: fadeIn 0.5s;
+            width: 100%;
+            max-width: 700px;
+        }
+        
+        #status-bar { 
+            margin-bottom: 25px; 
+            padding: 20px; 
+            background: var(--panel); 
+            border-radius: 16px; 
+            width: 100%;
+            box-sizing: border-box;
+            border: 1px solid rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
+        }
+        
+        #board { 
+            display: grid; 
+            grid-template-columns: repeat(8, minmax(45px, 60px)); 
+            gap: 6px; 
+            background: #0f3460; 
+            padding: 15px; 
+            border-radius: 16px; 
+            border: 4px solid var(--panel);
+            justify-content: center;
+            margin: 0 auto;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        
+        .cell { 
+            width: 100%; 
+            aspect-ratio: 1/1;
+            border-radius: 8px; 
+            display: flex; 
+            flex-wrap: wrap; 
+            align-items: center; 
+            justify-content: center; 
+            cursor: pointer; 
+            transition: all 0.3s; 
+            position: relative; 
+            background: rgba(26, 26, 46, 0.9);
+            overflow: hidden;
+        }
+        
+        .cell:hover { 
+            transform: scale(1.08); 
+        }
+        
+        .cell.clickable { 
+            cursor: pointer; 
+        }
+        
+        .cell.not-clickable { 
+            cursor: not-allowed; 
+            opacity: 0.7; 
+        }
+        
+        .cell.first-move { 
+            border: 3px dashed #ffff00 !important; 
+            animation: pulse-first 2s infinite; 
+        }
+        
+        .cell.my-color { 
+            border: 3px solid rgba(255,255,255,0.8);
+            box-shadow: inset 0 0 15px rgba(255,255,255,0.3);
+        }
+        
+        .cell.red { 
+            background: linear-gradient(135deg, #ff4d4d, #ff3333) !important; 
+        }
+        
+        .cell.blue { 
+            background: linear-gradient(135deg, #00d2ff, #0099ff) !important; 
+        }
+        
+        .cell.green { 
+            background: linear-gradient(135deg, #2ecc71, #27ae60) !important; 
+        }
+        
+        .cell.yellow { 
+            background: linear-gradient(135deg, #f1c40f, #f39c12) !important; 
+        }
+        
+        .cell.red.three-dots { 
+            background: linear-gradient(135deg, #ff6666, #ff4d4d) !important; 
+            box-shadow: 0 0 20px rgba(255, 102, 102, 0.5), inset 0 0 15px rgba(255, 255, 255, 0.4); 
+        }
+        
+        .cell.blue.three-dots { 
+            background: linear-gradient(135deg, #33e0ff, #00d2ff) !important; 
+            box-shadow: 0 0 20px rgba(51, 224, 255, 0.5), inset 0 0 15px rgba(255, 255, 255, 0.4); 
+        }
+        
+        .cell.green.three-dots { 
+            background: linear-gradient(135deg, #4cd964, #2ecc71) !important; 
+            box-shadow: 0 0 20px rgba(76, 217, 100, 0.5), inset 0 0 15px rgba(255, 255, 255, 0.4); 
+        }
+        
+        .cell.yellow.three-dots { 
+            background: linear-gradient(135deg, #ffd700, #f1c40f) !important; 
+            box-shadow: 0 0 20px rgba(255, 215, 0, 0.5), inset 0 0 15px rgba(255, 255, 255, 0.4); 
+        }
+        
+        .cell.warning { 
+            animation: warning-pulse 1s infinite;
+        }
+
+        .white-dot { 
+            width: 12px; 
+            height: 12px; 
+            background: white; 
+            border-radius: 50%; 
+            margin: 2px; 
+            box-shadow: 0 0 8px rgba(255,255,255,0.9); 
+        }
+        
+        .turn-indicator { 
+            animation: pulse 1.5s infinite; 
+        }
+        
+        @keyframes pulse { 
+            0% { box-shadow: 0 0 0 0 rgba(233, 69, 96, 0.7); } 
+            70% { box-shadow: 0 0 0 15px rgba(233, 69, 96, 0); } 
+            100% { box-shadow: 0 0 0 0 rgba(233, 69, 96, 0); } 
+        }
+        
+        @keyframes pulse-first { 
+            0% { border-color: #ffff00; box-shadow: 0 0 10px #ffff00; } 
+            50% { border-color: #ff9900; box-shadow: 0 0 20px #ff9900; } 
+            100% { border-color: #ffff00; box-shadow: 0 0 10px #ffff00; } 
+        }
+        
+        @keyframes warning-pulse { 
+            0% { box-shadow: 0 0 10px currentColor, inset 0 0 10px rgba(255, 255, 255, 0.4); }
+            50% { box-shadow: 0 0 25px currentColor, inset 0 0 15px rgba(255, 255, 255, 0.6); }
+            100% { box-shadow: 0 0 10px currentColor, inset 0 0 10px rgba(255, 255, 255, 0.4); }
+        }
+
+        @keyframes fadeIn { 
+            from { opacity: 0; transform: translateY(20px); } 
+            to { opacity: 1; transform: translateY(0); } 
+        }
+        
+        .player-list { 
+            margin-top: 15px; 
+            font-size: 14px; 
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 8px;
+        }
+        
+        .player-item { 
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px; 
+            border-radius: 8px; 
+            font-size: 13px;
+            font-weight: 500;
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .first-move-indicator { 
+            color: #ffff00; 
+            font-weight: bold; 
+            animation: blink 1s infinite; 
+            background: rgba(255, 255, 0, 0.1);
+            padding: 4px 8px;
+            border-radius: 6px;
+            display: inline-block;
+        }
+        
+        @keyframes blink { 
+            0%, 100% { opacity: 1; } 
+            50% { opacity: 0.5; } 
+        }
+        
+        #notification {
+            position: fixed;
+            top: 25px;
+            right: 25px;
+            background: var(--panel);
+            padding: 18px;
+            border-radius: 12px;
+            border-left: 5px solid var(--primary);
+            display: none;
+            z-index: 1000;
+            max-width: 350px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.1);
+            animation: slideIn 0.3s ease-out;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(100%);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        
+        .game-rules {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 12px;
+            border-radius: 10px;
+            margin-top: 15px;
+            font-size: 13px;
+            line-height: 1.5;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        
+        .dot-count {
+            position: absolute;
+            bottom: 4px;
+            right: 4px;
+            font-size: 11px;
+            font-weight: bold;
+            color: white;
+            text-shadow: 0 0 4px rgba(0,0,0,0.8);
+            background: rgba(0, 0, 0, 0.6);
+            padding: 2px 5px;
+            border-radius: 4px;
+            min-width: 18px;
+            text-align: center;
+        }
+        
+        .chat-header {
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.2);
+            border-bottom: 2px solid #0f3460;
+            text-align: center;
+        }
+        
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        
+        .chat-input-container {
+            padding: 20px;
+            border-top: 2px solid #0f3460;
+            display: flex;
+            gap: 12px;
+        }
+        
+        #chat-input {
+            flex: 1;
+            padding: 14px;
+            border-radius: 10px;
+            border: 2px solid #0f3460;
+            background: rgba(26, 26, 46, 0.8);
+            color: white;
+            font-size: 14px;
+            box-sizing: border-box;
+            transition: all 0.3s;
+        }
+        
+        #chat-input:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(233, 69, 96, 0.2);
+        }
+        
+        #send-chat {
+            padding: 14px 24px;
+            background: linear-gradient(135deg, var(--primary), #ff2e63);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: bold;
+            white-space: nowrap;
+            transition: all 0.3s;
+        }
+        
+        #send-chat:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(233, 69, 96, 0.3);
+        }
+        
+        #send-chat:disabled {
+            background: #666;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .message {
+            padding: 12px;
+            border-radius: 12px;
+            max-width: 85%;
+            word-wrap: break-word;
+            animation: fadeIn 0.3s;
+            backdrop-filter: blur(5px);
+        }
+        
+        .message.system {
+            background: rgba(0, 0, 0, 0.3);
+            color: #8a9bb2;
+            font-style: italic;
+            font-size: 12px;
+            text-align: center;
+            margin: 5px 0;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        
+        .message.own {
+            background: linear-gradient(135deg, #0f3460, #1a4a8a);
+            align-self: flex-end;
+            border-bottom-right-radius: 4px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .message.other {
+            background: var(--panel);
+            align-self: flex-start;
+            border-bottom-left-radius: 4px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .message-sender {
+            font-weight: 600;
+            font-size: 12px;
+            margin-bottom: 4px;
+            color: #8a9bb2;
+        }
+        
+        .message-text {
+            font-size: 14px;
+            line-height: 1.4;
+        }
+        
+        .leave-game-btn {
+            position: absolute;
+            top: 25px;
+            left: 25px;
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #e94560, #ff2e63);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: bold;
+            z-index: 100;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 5px 15px rgba(233, 69, 96, 0.3);
+        }
+        
+        .leave-game-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(233, 69, 96, 0.4);
+        }
+        
+        .game-controls {
+            margin-top: 25px;
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        
+        .game-controls button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 14px;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .game-controls button:hover {
+            transform: translateY(-2px);
+        }
+        
+        .connection-status {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            font-size: 13px;
+            padding: 10px 16px;
+            border-radius: 10px;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.1);
+            z-index: 100;
+        }
+        
+        .connection-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+        
+        .connection-dot.connected {
+            background: #2ecc71;
+            box-shadow: 0 0 10px #2ecc71;
+        }
+        
+        .connection-dot.disconnected {
+            background: #e74c3c;
+        }
+        
+        .connection-dot.connecting {
+            background: #f39c12;
+            animation: pulse 1.5s infinite;
+        }
+        
+        /* Responsive */
+        @media (max-width: 1200px) {
+            .container {
+                flex-direction: column;
+            }
+            
+            .right-panel {
+                max-width: 100%;
+                height: 300px;
+                border-left: none;
+                border-top: 2px solid #0f3460;
+            }
+            
+            .left-panel {
+                flex: 1;
+                overflow-y: auto;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            #board {
+                grid-template-columns: repeat(8, minmax(35px, 50px));
+                gap: 4px;
+                padding: 10px;
+            }
+            
+            .white-dot {
+                width: 8px;
+                height: 8px;
+                margin: 1px;
+            }
+            
+            .leave-game-btn {
+                position: relative;
+                top: 0;
+                left: 0;
+                margin-bottom: 15px;
+                justify-content: center;
+            }
+            
+            .game-controls {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .game-controls button {
+                width: 200px;
+                justify-content: center;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            #lobby {
+                padding: 20px;
+                width: 90vw;
+            }
+            
+            .player-count-options {
+                grid-template-columns: 1fr;
+            }
+            
+            #board {
+                grid-template-columns: repeat(8, minmax(30px, 40px));
+            }
+            
+            .cell {
+                min-width: 30px;
+            }
+            
+            .white-dot {
+                width: 6px;
+                height: 6px;
+            }
+            
+            .connection-status {
+                bottom: 10px;
+                left: 10px;
+                right: 10px;
+                justify-content: center;
+            }
+        }
+        
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.1);
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: var(--primary);
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: #ff2e63;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="left-panel">
+            <div id="lobby">
+                <h1 style="letter-spacing: 2px; margin-bottom: 20px; color: var(--primary); text-shadow: 0 2px 10px rgba(233, 69, 96, 0.3);">🎮 COLOR WARS</h1>
+                <input type="text" id="uname" placeholder="Enter your name" required maxlength="20">
+                <input type="text" id="rid" placeholder="Enter room ID" required maxlength="50">
+                
+                <div class="player-count-selector">
+                    <div class="player-count-label">Number of Players:</div>
+                    <div class="player-count-options">
+                        <button type="button" class="player-count-btn active" onclick="setPlayerCount(2)">2 Players</button>
+                        <button type="button" class="player-count-btn" onclick="setPlayerCount(3)">3 Players</button>
+                        <button type="button" class="player-count-btn" onclick="setPlayerCount(4)">4 Players</button>
+                    </div>
+                    <input type="hidden" id="playerCount" value="2">
+                </div>
+                
+                <button class="join-btn" onclick="joinLobby()" id="join-btn">
+                    <span id="join-text">🎮 JOIN GAME</span>
+                </button>
+                
+                <div style="margin-top: 25px; font-size: 13px; color: #8a9bb2; line-height: 1.5;">
+                    <p>✨ <strong>Share the Room ID</strong> with friends to play together!</p>
+                    <p style="margin-top: 8px; font-size: 12px;">Built with ❤️ for multiplayer gaming</p>
+                </div>
+            </div>
+
+            <div id="game-container">
+                <button class="leave-game-btn" onclick="leaveGame()">
+                    <span>←</span>
+                    <span>Leave Game</span>
+                </button>
+                
+                <div id="status-bar">
+                    <h2 id="turn-display" style="margin: 0; font-size: 1.8rem; font-weight: 700;">Connecting...</h2>
+                    <div id="player-instructions" style="margin: 12px 0; min-height: 24px;"></div>
+                    <div id="player-info" class="player-list" style="margin: 15px 0 0 0;"></div>
+                    <div id="room-info" style="margin: 10px 0 0 0; font-size: 13px; color: #8a9bb2;"></div>
+                    <div class="game-rules">
+                        <strong style="color: var(--primary);">🎮 Game Rules:</strong> 
+                        <span id="rules-text">First: Click empty cell (get 3 dots). Then: Click your cells to add dots.</span>
+                    </div>
+                </div>
+                <div id="board"></div>
+                
+                <div class="game-controls">
+                    <button onclick="showGameRules()" style="background: linear-gradient(135deg, #0f3460, #1a4a8a); color: white;">
+                        <span>📖</span>
+                        <span>Game Rules</span>
+                    </button>
+                    <button onclick="copyRoomLink()" style="background: linear-gradient(135deg, #2ecc71, #27ae60); color: white;">
+                        <span>🔗</span>
+                        <span>Copy Room Link</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="right-panel" id="chat-panel" style="display: none;">
+            <div class="chat-header">
+                <h3 style="margin: 0; font-size: 1.3rem; color: var(--primary);">💬 Game Chat</h3>
+                <div id="chat-room-info" style="font-size: 12px; color: #8a9bb2; margin-top: 6px;"></div>
+            </div>
+            <div class="chat-messages" id="chat-messages">
+                <div class="message system">
+                    💬 Welcome to the game chat! Messages are visible to all players in the room.
+                </div>
+            </div>
+            <div class="chat-input-container">
+                <input type="text" id="chat-input" placeholder="Type your message here..." maxlength="200" disabled>
+                <button id="send-chat" onclick="sendMessage()" disabled>Send</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="notification"></div>
+    
+    <div class="connection-status" id="connection-status" style="display: none;">
+        <div class="connection-dot" id="connection-dot"></div>
+        <span id="connection-text">Connecting to server...</span>
+    </div>
+
+    <script>
+        // Get current domain for Socket.IO connection
+        const serverUrl = window.location.origin;
+        
+        const socket = io(serverUrl, {
+            transports: ['websocket', 'polling'],
+            reconnection: true,
+            reconnectionAttempts: Infinity,
+            reconnectionDelay: 1000,
+            reconnectionDelayMax: 5000,
+            timeout: 20000,
+            forceNew: true,
+            path: '/socket.io/'
+        });
+        
+        let myRoom = "";
+        let myUsername = "";
+        let myColor = "";
+        let myPlayerId = "";
+        let selectedPlayerCount = 2;
+        let currentGameState = null;
+        let isConnected = false;
+        let connectionAttempts = 0;
+
+        function updateConnectionStatus(status, message) {
+            const statusEl = document.getElementById('connection-status');
+            const dotEl = document.getElementById('connection-dot');
+            const textEl = document.getElementById('connection-text');
+            
+            statusEl.style.display = 'block';
+            dotEl.className = 'connection-dot ' + status;
+            textEl.textContent = message;
+            
+            isConnected = status === 'connected';
+            
+            // Update UI elements based on connection
+            const joinBtn = document.getElementById('join-btn');
+            const joinText = document.getElementById('join-text');
+            const chatInput = document.getElementById('chat-input');
+            const sendChat = document.getElementById('send-chat');
+            
+            if (isConnected) {
+                joinBtn.disabled = false;
+                joinText.textContent = '🎮 JOIN GAME';
+                if (myRoom) {
+                    chatInput.disabled = false;
+                    sendChat.disabled = false;
+                }
+            } else {
+                joinBtn.disabled = true;
+                joinText.textContent = '🔌 Connecting...';
+                chatInput.disabled = true;
+                sendChat.disabled = true;
+            }
+        }
+
+        function setPlayerCount(count) {
+            selectedPlayerCount = count;
+            document.getElementById('playerCount').value = count;
+            
+            document.querySelectorAll('.player-count-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+        }
+
+        function joinLobby() {
+            myUsername = document.getElementById('uname').value.trim();
+            myRoom = document.getElementById('rid').value.trim();
+
+            if(!myUsername || !myRoom) {
+                showNotification("Please enter both Name and Room ID", "error");
+                return;
+            }
+            
+            if (myUsername.length > 20) {
+                showNotification("Username must be 20 characters or less", "error");
+                return;
+            }
+            
+            if (myRoom.length > 50) {
+                showNotification("Room ID must be 50 characters or less", "error");
+                return;
+            }
+
+            if (!isConnected) {
+                showNotification("Connecting to server... Please wait", "warning");
+                return;
+            }
+
+            // Update UI
+            document.getElementById('lobby').style.display = 'none';
+            document.getElementById('game-container').style.display = 'block';
+            document.getElementById('chat-panel').style.display = 'flex';
+            
+            document.getElementById('chat-room-info').textContent = `Room: ${myRoom}`;
+            document.getElementById('room-info').textContent = `Room: ${myRoom}`;
+
+            // Emit join event
+            socket.emit('join_room', { 
+                room: myRoom, 
+                username: myUsername, 
+                playerCount: selectedPlayerCount 
+            });
+            
+            // Enable chat
+            document.getElementById('chat-input').disabled = false;
+            document.getElementById('send-chat').disabled = false;
+        }
+
+        function leaveGame() {
+            if (confirm("Are you sure you want to leave the game?")) {
+                location.reload();
+            }
+        }
+
+        function showGameRules() {
+            const rules = `
+🎮 COLOR WARS - GAME RULES
+
+1️⃣ FIRST MOVE
+   • Click ANY empty cell on the board
+   • You'll get 3 dots in that cell
+   • The cell becomes your color
+
+2️⃣ SUBSEQUENT MOVES
+   • Click ONLY on your own cells
+   • Each click adds 1 dot
+   • Build up your cells strategically
+
+3️⃣ EXPLOSIONS 💥
+   • When a cell reaches 4 dots, it EXPLODES!
+   • The exploding cell resets to 0 dots
+   • Adjacent cells (up/down/left/right):
+     • Become YOUR color
+     • Get +1 dot added
+     • Can cause chain explosions!
+
+4️⃣ WINNING 🏆
+   • Last player with dots on the board WINS!
+   • Use explosions to capture opponent's cells
+   • Strategy: Control the board and eliminate others
+
+💡 PRO TIPS:
+• Plan your first move carefully
+• Watch for cells about to explode (3 dots)
+• Use explosions to expand your territory
+• Block opponents by surrounding them
+
+Have fun and may the best color win! 🎨
+            `;
+            
+            alert(rules);
+        }
+        
+        function copyRoomLink() {
+            if (!myRoom) {
+                showNotification("Join a room first!", "error");
+                return;
+            }
+            
+            const roomLink = window.location.origin + '?room=' + encodeURIComponent(myRoom);
+            navigator.clipboard.writeText(roomLink).then(() => {
+                showNotification("✅ Room link copied to clipboard!", "success");
+            }).catch(err => {
+                console.error('Failed to copy: ', err);
+                showNotification("❌ Failed to copy link", "error");
+            });
+        }
+
+        function sendMessage() {
+            const chatInput = document.getElementById('chat-input');
+            const message = chatInput.value.trim();
+            
+            if (!message || !isConnected || !myRoom) return;
+            
+            socket.emit('chat_message', {
+                room: myRoom,
+                message: message,
+                username: myUsername,
+                color: myColor
+            });
+            
+            chatInput.value = '';
+            chatInput.focus();
+        }
+
+        // Event Listeners
+        document.getElementById('chat-input').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && isConnected && myRoom) {
+                sendMessage();
+            }
+        });
+        
+        document.getElementById('uname').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                document.getElementById('rid').focus();
+            }
+        });
+        
+        document.getElementById('rid').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                joinLobby();
+            }
+        });
+
+        function checkUrlParams() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const roomParam = urlParams.get('room');
+            if (roomParam) {
+                document.getElementById('rid').value = roomParam;
+                document.getElementById('uname').focus();
+            }
+        }
+
+        function showNotification(message, type = "info") {
+            const notification = document.getElementById('notification');
+            notification.textContent = message;
+            notification.style.display = 'block';
+            
+            const colors = {
+                error: '#ff4444',
+                success: '#44ff44',
+                warning: '#ffaa44',
+                info: '#e94560'
+            };
+            
+            notification.style.borderLeftColor = colors[type] || colors.info;
+            notification.style.background = type === "info" ? '#16213e' : colors[type] + '20';
+            
+            setTimeout(() => {
+                notification.style.display = 'none';
+            }, 3000);
+        }
+
+        function isValidMove(r, c, state) {
+            if (!state || !state.started) return false;
+            
+            const currentPlayer = state.players[state.turn];
+            if (currentPlayer.id !== myPlayerId) return false;
+            
+            const cell = state.grid[r][c];
+            const playerColor = currentPlayer.color;
+            const isFirstMove = state.first_moves_done && !state.first_moves_done[playerColor];
+            
+            if (isFirstMove) {
+                return cell.owner === null;
+            } else {
+                return cell.owner === playerColor;
+            }
+        }
+
+        function addChatMessage(data, type = 'other') {
+            const chatMessages = document.getElementById('chat-messages');
+            const messageDiv = document.createElement('div');
+            
+            messageDiv.className = `message ${type}`;
+            
+            if (type === 'system') {
+                messageDiv.textContent = data.message;
+                messageDiv.classList.add('system');
+            } else {
+                messageDiv.innerHTML = `
+                    <div class="message-sender" style="color: ${data.color || '#8a9bb2'}">
+                        ${data.username}
+                    </div>
+                    <div class="message-text">${data.message}</div>
+                `;
+                messageDiv.classList.add(type);
+            }
+            
+            chatMessages.appendChild(messageDiv);
+            
+            // Scroll to bottom
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            
+            // Limit messages
+            if (chatMessages.children.length > 100) {
+                chatMessages.removeChild(chatMessages.children[0]);
+            }
+        }
+
+        // Socket.IO Event Handlers
+        socket.on('connect', () => {
+            connectionAttempts = 0;
+            updateConnectionStatus('connected', 'Connected to server');
+            console.log('✅ Connected to server:', socket.id);
+            
+            // Try to rejoin if we were in a room
+            if (myRoom && myUsername) {
+                setTimeout(() => {
+                    socket.emit('join_room', { 
+                        room: myRoom, 
+                        username: myUsername, 
+                        playerCount: selectedPlayerCount 
+                    });
+                }, 500);
+            }
+        });
+
+        socket.on('connect_error', (error) => {
+            connectionAttempts++;
+            updateConnectionStatus('disconnected', `Connection error (${connectionAttempts})`);
+            console.error('❌ Connection error:', error);
+            
+            if (connectionAttempts <= 5) {
+                setTimeout(() => {
+                    socket.connect();
+                }, 2000);
+            }
+        });
+
+        socket.on('disconnect', (reason) => {
+            updateConnectionStatus('disconnected', 'Disconnected');
+            console.log('🔌 Disconnected:', reason);
+        });
+
+        socket.on('reconnecting', (attemptNumber) => {
+            updateConnectionStatus('connecting', `Reconnecting... (${attemptNumber})`);
+            console.log('🔄 Reconnecting attempt:', attemptNumber);
+        });
+
+        socket.on('reconnect', (attemptNumber) => {
+            updateConnectionStatus('connected', 'Reconnected');
+            console.log('✅ Reconnected after', attemptNumber, 'attempts');
+        });
+
+        socket.on('reconnect_failed', () => {
+            updateConnectionStatus('disconnected', 'Connection failed');
+            showNotification("❌ Failed to connect to server. Please refresh.", "error");
+        });
+
+        socket.on('init_player', (data) => {
+            myColor = data.color;
+            myPlayerId = socket.id;
+            showNotification(`🎮 You joined as ${myColor.toUpperCase()}`, "success");
+            
+            addChatMessage({
+                message: `🎮 You joined the game as ${myColor}`,
+                username: 'System'
+            }, 'system');
+        });
+
+        socket.on('update_state', (state) => {
+            currentGameState = state;
+            const board = document.getElementById('board');
+            const turnDisplay = document.getElementById('turn-display');
+            const playerInfo = document.getElementById('player-info');
+            const roomInfo = document.getElementById('room-info');
+            const instructions = document.getElementById('player-instructions');
+            const rulesText = document.getElementById('rules-text');
+            
+            board.innerHTML = '';
+            
+            if (!state.started) {
+                turnDisplay.innerText = `⏳ Waiting for players...`;
+                turnDisplay.style.color = "#8a9bb2";
+                instructions.innerHTML = '';
+                rulesText.textContent = 'Waiting for players to join...';
+                
+                roomInfo.innerHTML = `🏠 Room: <strong>${myRoom}</strong> | 👥 Players: ${state.players.length}/${state.max}`;
+                
+                let playerListHTML = '<div style="margin-bottom: 8px; color: #8a9bb2;">Players in room:</div>';
+                state.players.forEach(player => {
+                    const isYou = player.id === myPlayerId;
+                    playerListHTML += 
+                        `<div class="player-item" style="background: ${player.color};">
+                            <span>${player.name}</span>
+                            ${isYou ? '<span style="font-size: 10px;">(You)</span>' : ''}
+                        </div>`;
+                });
+                playerInfo.innerHTML = playerListHTML;
+                
+            } else {
+                const currentPlayer = state.players[state.turn];
+                const isMyTurn = currentPlayer.id === myPlayerId;
+                const isFirstMove = state.first_moves_done && !state.first_moves_done[currentPlayer.color];
+                
+                // Update turn display
+                if (isMyTurn) {
+                    turnDisplay.innerHTML = `🎮 <strong>YOUR TURN</strong> (${currentPlayer.color.toUpperCase()})`;
+                    turnDisplay.style.color = currentPlayer.color;
+                    turnDisplay.classList.add('turn-indicator');
+                    
+                    if (isFirstMove) {
+                        instructions.innerHTML = '<span class="first-move-indicator">🎯 FIRST MOVE: Click any empty cell to place 3 dots!</span>';
+                        rulesText.textContent = '🎯 First move: Click ANY empty cell to get 3 dots!';
+                    } else {
+                        instructions.innerHTML = '🎯 Click on your cells to add dots (4 dots = 💥 EXPLODE!)';
+                        rulesText.textContent = '🎯 Click YOUR cells to add dots. 4 dots = 💥 EXPLODE!';
+                    }
+                } else {
+                    turnDisplay.innerHTML = `⏳ ${currentPlayer.name}'s Turn (${currentPlayer.color})`;
+                    turnDisplay.style.color = currentPlayer.color;
+                    turnDisplay.classList.remove('turn-indicator');
+                    instructions.innerHTML = isFirstMove ? 
+                        `<span class="first-move-indicator">${currentPlayer.name} is making their first move</span>` :
+                        `⏳ Waiting for ${currentPlayer.name} to move`;
+                    rulesText.textContent = '💥 Explosions CONVERT adjacent cells to your color!';
+                }
+                
+                roomInfo.innerHTML = `🏠 Room: <strong>${myRoom}</strong> | 🔄 Turn: ${state.turn + 1}/${state.players.length}`;
+                
+                // Show players
+                let playerListHTML = '';
+                state.players.forEach((player, index) => {
+                    const isCurrent = index === state.turn;
+                    const isYou = player.id === myPlayerId;
+                    const playerFirstMoveDone = state.first_moves_done[player.color];
+                    
+                    playerListHTML += 
+                        `<div class="player-item" style="background: ${player.color}; ${isCurrent ? 'border: 2px solid white; box-shadow: 0 0 10px white;' : ''}">
+                            ${isCurrent ? '🎮 ' : ''}${player.name}
+                            <span style="font-size: 12px;">${playerFirstMoveDone ? '✅' : '⏳'}</span>
+                            ${isYou ? '<span style="font-size: 10px;">(You)</span>' : ''}
+                        </div>`;
+                });
+                playerInfo.innerHTML = playerListHTML;
+            }
+
+            // Create Grid
+            state.grid.forEach((row, r) => {
+                row.forEach((cell, c) => {
+                    const cellDiv = document.createElement('div');
+                    cellDiv.className = 'cell';
+                    
+                    if (cell.owner) {
+                        cellDiv.classList.add(cell.owner);
+                    }
+                    
+                    if (cell.dots === 3) {
+                        cellDiv.classList.add('three-dots');
+                        cellDiv.classList.add('warning');
+                    }
+                    
+                    if (cell.owner === myColor) {
+                        cellDiv.classList.add('my-color');
+                    }
+                    
+                    if (state.started) {
+                        const currentPlayer = state.players[state.turn];
+                        const isMyTurn = currentPlayer.id === myPlayerId;
+                        const isFirstMove = state.first_moves_done && !state.first_moves_done[currentPlayer.color];
+                        
+                        if (isMyTurn && isValidMove(r, c, state)) {
+                            cellDiv.classList.add('clickable');
+                            
+                            if (isFirstMove && cell.owner === null) {
+                                cellDiv.classList.add('first-move');
+                            }
+                            
+                            cellDiv.onclick = () => {
+                                if (!isConnected) {
+                                    showNotification("❌ Not connected to server", "error");
+                                    return;
+                                }
+                                socket.emit('make_move', { 
+                                    room: myRoom, 
+                                    r: r, 
+                                    c: c 
+                                });
+                            };
+                        } else {
+                            cellDiv.classList.add('not-clickable');
+                            cellDiv.onclick = null;
+                        }
+                    } else {
+                        cellDiv.classList.add('not-clickable');
+                        cellDiv.onclick = null;
+                    }
+
+                    // Add dots
+                    for(let i = 0; i < cell.dots; i++) {
+                        const dot = document.createElement('div');
+                        dot.className = 'white-dot';
+                        cellDiv.appendChild(dot);
+                    }
+                    
+                    // Show dot count
+                    if (cell.dots > 0) {
+                        const countSpan = document.createElement('span');
+                        countSpan.className = 'dot-count';
+                        countSpan.textContent = cell.dots;
+                        cellDiv.appendChild(countSpan);
+                    }
+                    
+                    // Add warning for 3 dots
+                    if (cell.dots === 3) {
+                        const warningSpan = document.createElement('span');
+                        warningSpan.textContent = '⚠';
+                        warningSpan.style.position = 'absolute';
+                        warningSpan.style.top = '3px';
+                        warningSpan.style.left = '3px';
+                        warningSpan.style.fontSize = '10px';
+                        warningSpan.style.color = '#ff0000';
+                        warningSpan.style.fontWeight = 'bold';
+                        warningSpan.style.textShadow = '0 0 3px black';
+                        cellDiv.appendChild(warningSpan);
+                    }
+                    
+                    board.appendChild(cellDiv);
+                });
+            });
+        });
+
+        socket.on('chat_message', (data) => {
+            const isOwnMessage = data.username === myUsername;
+            addChatMessage(data, isOwnMessage ? 'own' : 'other');
+        });
+
+        socket.on('player_joined', (data) => {
+            addChatMessage({
+                message: `🎮 ${data.username} joined the game`,
+                username: 'System'
+            }, 'system');
+        });
+
+        socket.on('player_left', (data) => {
+            addChatMessage({
+                message: `👋 ${data.username} left the game`,
+                username: 'System'
+            }, 'system');
+        });
+
+        socket.on('game_over', (data) => {
+            addChatMessage({
+                message: `🏆 🎉 GAME OVER! Winner: ${data.winner} 🎉`,
+                username: 'System'
+            }, 'system');
+            
+            showNotification(`🏆 GAME OVER! Winner: ${data.winner}`, "success");
+            setTimeout(() => {
+                if (confirm("🎮 Game Over! Would you like to play again?")) {
+                    location.reload();
+                }
+            }, 3000);
+        });
+
+        socket.on('error', (data) => {
+            showNotification("❌ " + data.msg, "error");
+        });
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            checkUrlParams();
+            updateConnectionStatus('connecting', 'Connecting to server...');
+            
+            // Auto-focus username field
+            setTimeout(() => {
+                const unameField = document.getElementById('uname');
+                if (unameField && !unameField.value) {
+                    unameField.focus();
+                }
+            }, 500);
+        });
+    </script>
+</body>
+</html>
