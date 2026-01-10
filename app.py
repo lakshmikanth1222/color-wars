@@ -13,15 +13,17 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'color_wars_render_production_2024')
 
 # Configure Socket.IO for Render
+# Configure Socket.IO for Render - Use gevent for better compatibility
 socketio = SocketIO(
     app,
     cors_allowed_origins="*",
-    async_mode='eventlet',
+    async_mode='gevent',  # Changed from eventlet to gevent
     logger=False,
     engineio_logger=False,
     ping_timeout=60,
     ping_interval=25,
-    max_http_buffer_size=1e8
+    max_http_buffer_size=1e8,
+    transports=['websocket', 'polling']
 )
 
 # Dictionary to store active game rooms
