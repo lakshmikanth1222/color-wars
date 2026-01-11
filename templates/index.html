@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Color Wars Online</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        :root { --primary: #e94560; --bg: #1a1a2e; --panel: #16213e; }
+        body { 
+            background: var(--bg); 
+            color: white; 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            margin: 0; 
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        .container {
+            display: flex;
+            height: 100vh;
+            width: 100vw;
+        }
+        
+        /* Left Panel - Game Area */
+        .left-panel {
+            flex: 3;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        /* Right Panel - Chat Area */
+        .right-panel {
+            flex: 1;
+            min-width: 300px;
+            max-width: 350px;
+            background: var(--panel);
+            display: flex;
+            flex-direction: column;
+            border-left: 2px solid #0f3460;
+        }
+        
+        /* Lobby Styles */
+        #lobby { 
+            background: var(--panel); 
+            padding: 40px; 
+            border-radius: 20px; 
+            box-shadow: 0 15px 35px rgba(0,0,0,0.5); 
+            text-align: center; 
+            width: 350px; 
+        }
+        
+        input { 
+            display: block; 
+            width: 90%; 
+            margin: 15px auto; 
+            padding: 12px; 
+            border-radius: 8px; 
+            border: 2px solid #0f3460; 
+            background: #1a1a2e; 
+            color: white; 
+            font-size: 16px; 
+        }
+        
+        .join-btn { 
+            width: 100%; 
+            padding: 15px; 
+            background: var(--primary); 
+            color: white; 
+            border: none; 
+            border-radius: 8px; 
+            cursor: pointer; 
+            font-weight: bold; 
+            font-size: 18px; 
+            transition: 0.3s; 
+        }
+        
+        .join-btn:hover { 
+            background: #ff4d6d; 
+            transform: translateY(-2px); 
+        }
+        
+        /* Player Count Selection */
+        .player-count-selector { 
+            margin: 20px 0; 
+        }
+        
+        .player-count-label { 
+            display: block; 
+            margin-bottom: 10px; 
+            font-weight: bold; 
+        }
+        
+        .player-count-options { 
+            display: flex; 
+            justify-content: center; 
+            gap: 10px; 
+        }
+        
+        .player-count-btn { 
+            padding: 10px 20px; 
+            background: #0f3460; 
+            color: white; 
+            border: 2px solid #0f3460; 
+            border-radius: 6px; 
+            cursor: pointer; 
+            transition: 0.3s; 
+            font-weight: bold; 
+        }
+        
+        .player-count-btn:hover { 
+            background: #1a4a8a; 
+        }
+        
+        .player-count-btn.active { 
+            background: var(--primary); 
+            border-color: var(--primary); 
+        }
+
+        /* Game UI Styles */
+        #game-container { 
+            display: none; 
+            text-align: center; 
+            animation: fadeIn 0.5s;
+            width: 100%;
+        }
+        
+        #status-bar { 
+            margin-bottom: 20px; 
+            padding: 15px; 
+            background: var(--panel); 
+            border-radius: 12px; 
+            min-width: 400px; 
+            max-width: 600px;
+        }
+        
+        #board { 
+            display: grid; 
+            grid-template-columns: repeat(8, 55px); 
+            gap: 6px; 
+            background: #0f3460; 
+            padding: 12px; 
+            border-radius: 12px; 
+            border: 4px solid var(--panel); 
+        }
+        
+        .cell { 
+            width: 55px; 
+            height: 55px; 
+            border-radius: 6px; 
+            display: flex; 
+            flex-wrap: wrap; 
+            align-items: center; 
+            justify-content: center; 
+            cursor: pointer; 
+            transition: all 0.2s; 
+            position: relative; 
+            background: #1a1a2e; 
+        }
+        
+        .cell:hover { 
+            transform: scale(1.05); 
+        }
+        
+        .cell.clickable { 
+            cursor: pointer; 
+        }
+        
+        .cell.not-clickable { 
+            cursor: not-allowed; 
+            opacity: 0.8; 
+        }
+        
+        .cell.first-move { 
+            border: 3px dashed #ffff00 !important; 
+            animation: pulse-first 2s infinite; 
+        }
+        
+        .cell.my-color { 
+            border: 2px solid white; 
+        }
+        
+        /* Color Classes */
+        .cell.red { 
+            background: #ff4d4d !important; 
+        }
+        
+        .cell.blue { 
+            background: #00d2ff !important; 
+        }
+        
+        .cell.green { 
+            background: #2ecc71 !important; 
+        }
+        
+        .cell.yellow { 
+            background: #f1c40f !important; 
+        }
+        
+        /* 3-dot cells */
+        .cell.red.three-dots { 
+            background: #ff6666 !important; 
+            box-shadow: 0 0 15px #ff6666, inset 0 0 10px rgba(255, 255, 255, 0.3); 
+        }
+        
+        .cell.blue.three-dots { 
+            background: #33e0ff !important; 
+            box-shadow: 0 0 15px #33e0ff, inset 0 0 10px rgba(255, 255, 255, 0.3); 
+        }
+        
+        .cell.green.three-dots { 
+            background: #4cd964 !important; 
+            box-shadow: 0 0 15px #4cd964, inset 0 0 10px rgba(255, 255, 255, 0.3); 
+        }
+        
+        .cell.yellow.three-dots { 
+            background: #ffd700 !important; 
+            box-shadow: 0 0 15px #ffd700, inset 0 0 10px rgba(255, 255, 255, 0.3); 
+        }
+        
+        .cell.warning { 
+            animation: warning-pulse 1s infinite;
+        }
+
+        .white-dot { 
+            width: 12px; 
+            height: 12px; 
+            background: white; 
+            border-radius: 50%; 
+            margin: 2px; 
+            box-shadow: 0 0 8px rgba(255,255,255,0.8); 
+        }
+        
+        /* Animations */
+        .turn-indicator { 
+            animation: pulse 1.5s infinite; 
+        }
+        
+        @keyframes pulse { 
+            0% { box-shadow: 0 0 0 0 rgba(233, 69, 96, 0.7); } 
+            70% { box-shadow: 0 0 0 10px rgba(233, 69, 96, 0); } 
+            100% { box-shadow: 0 0 0 0 rgba(233, 69, 96, 0); } 
+        }
+        
+        @keyframes pulse-first { 
+            0% { border-color: #ffff00; } 
+            50% { border-color: #ff9900; } 
+            100% { border-color: #ffff00; } 
+        }
+        
+        @keyframes warning-pulse { 
+            0% { box-shadow: 0 0 5px currentColor, inset 0 0 5px rgba(255, 255, 255, 0.3); }
+            50% { box-shadow: 0 0 20px currentColor, inset 0 0 10px rgba(255, 255, 255, 0.5); }
+            100% { box-shadow: 0 0 5px currentColor, inset 0 0 5px rgba(255, 255, 255, 0.3); }
+        }
+
+        @keyframes fadeIn { 
+            from { opacity: 0; } 
+            to { opacity: 1; } 
+        }
+        
+        /* Player list */
+        .player-list { 
+            margin-top: 10px; 
+            font-size: 14px; 
+        }
+        
+        .player-item { 
+            display: inline-block; 
+            margin: 0 5px; 
+            padding: 2px 8px; 
+            border-radius: 4px; 
+        }
+        
+        /* First move indicator */
+        .first-move-indicator { 
+            color: #ffff00; 
+            font-weight: bold; 
+            animation: blink 1s infinite; 
+        }
+        
+        @keyframes blink { 
+            0%, 100% { opacity: 1; } 
+            50% { opacity: 0.5; } 
+        }
+        
+        /* Notification */
+        #notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: var(--panel);
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 5px solid var(--primary);
+            display: none;
+            z-index: 1000;
+            max-width: 300px;
+        }
+        
+        /* Game info panel */
+        .game-rules {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 10px;
+            border-radius: 8px;
+            margin-top: 10px;
+            font-size: 12px;
+        }
+        
+        /* Dot count display */
+        .dot-count {
+            position: absolute;
+            bottom: 2px;
+            right: 2px;
+            font-size: 10px;
+            font-weight: bold;
+            color: white;
+            text-shadow: 0 0 3px black;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 1px 3px;
+            border-radius: 3px;
+        }
+        
+        /* Chat Styles */
+        .chat-header {
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.2);
+            border-bottom: 2px solid #0f3460;
+            text-align: center;
+        }
+        
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .chat-input-container {
+            padding: 15px;
+            border-top: 2px solid #0f3460;
+            display: flex;
+            gap: 10px;
+        }
+        
+        #chat-input {
+            flex: 1;
+            padding: 12px;
+            border-radius: 6px;
+            border: 2px solid #0f3460;
+            background: #1a1a2e;
+            color: white;
+            font-size: 14px;
+        }
+        
+        #send-chat {
+            padding: 12px 20px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        
+        #send-chat:hover {
+            background: #ff4d6d;
+        }
+        
+        .message {
+            padding: 10px;
+            border-radius: 8px;
+            max-width: 85%;
+            word-wrap: break-word;
+        }
+        
+        .message.system {
+            background: rgba(0, 0, 0, 0.3);
+            color: #aaa;
+            font-style: italic;
+            font-size: 12px;
+            text-align: center;
+            margin: 5px 0;
+        }
+        
+        .message.own {
+            background: #0f3460;
+            align-self: flex-end;
+            border-bottom-right-radius: 4px;
+        }
+        
+        .message.other {
+            background: var(--panel);
+            align-self: flex-start;
+            border-bottom-left-radius: 4px;
+        }
+        
+        .message-sender {
+            font-weight: bold;
+            font-size: 12px;
+            margin-bottom: 3px;
+            color: #aaa;
+        }
+        
+        .message-text {
+            font-size: 14px;
+        }
+        
+        /* Leave Game Button */
+        .leave-game-btn {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            padding: 10px 20px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            z-index: 100;
+        }
+        
+        .leave-game-btn:hover {
+            background: #ff4d6d;
+        }
+        
+        /* Game controls */
+        .game-controls {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Left Panel - Game Area -->
+        <div class="left-panel">
+            <div id="lobby">
+                <h1 style="letter-spacing: 3px; margin-bottom: 30px;">COLOR WARS</h1>
+                <input type="text" id="uname" placeholder="Your Name" required>
+                <input type="text" id="rid" placeholder="Room ID" required>
+                
+                <div class="player-count-selector">
+                    <div class="player-count-label">Select Number of Players:</div>
+                    <div class="player-count-options">
+                        <button type="button" class="player-count-btn active" onclick="setPlayerCount(2)">2 Players</button>
+                        <button type="button" class="player-count-btn" onclick="setPlayerCount(3)">3 Players</button>
+                        <button type="button" class="player-count-btn" onclick="setPlayerCount(4)">4 Players</button>
+                    </div>
+                    <input type="hidden" id="playerCount" value="2">
+                </div>
+                
+                <button class="join-btn" onclick="joinLobby()">JOIN LOBBY</button>
+            </div>
+
+            <div id="game-container">
+                <!-- Leave Game Button - Top Left -->
+                <button class="leave-game-btn" onclick="leaveGame()">← Leave Game</button>
+                
+                <div id="status-bar">
+                    <h2 id="turn-display" style="margin: 0;">Connecting...</h2>
+                    <div id="player-instructions" style="margin: 5px 0;"></div>
+                    <div id="player-info" class="player-list" style="margin: 10px 0 0 0;"></div>
+                    <div id="room-info" style="margin: 5px 0 0 0; font-size: 12px; opacity: 0.6;"></div>
+                    <div class="game-rules">
+                        <strong>Game Rules:</strong> 
+                        <span id="rules-text">First: Click empty cell (get 3 dots). Then: Click your cells to add dots.</span>
+                    </div>
+                </div>
+                <div id="board"></div>
+                
+                <div class="game-controls">
+                    <button onclick="showGameRules()" style="padding: 10px 20px; background: #0f3460; color: white; border: none; border-radius: 6px; cursor: pointer;">Game Rules</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Panel - Chat Area -->
+        <div class="right-panel" id="chat-panel" style="display: none;">
+            <div class="chat-header">
+                <h3 style="margin: 0;">Chat Room</h3>
+                <div id="chat-room-info" style="font-size: 12px; opacity: 0.8; margin-top: 5px;"></div>
+            </div>
+            <div class="chat-messages" id="chat-messages">
+                <!-- Messages will appear here -->
+                <div class="message system">
+                    Welcome to the chat! Messages are visible to all players in the room.
+                </div>
+            </div>
+            <div class="chat-input-container">
+                <input type="text" id="chat-input" placeholder="Type your message..." maxlength="200">
+                <button id="send-chat" onclick="sendMessage()">Send</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="notification"></div>
+
+    <script>
+        const socket = io();
+        let myRoom = "";
+        let myUsername = "";
+        let myColor = "";
+        let myPlayerId = "";
+        let selectedPlayerCount = 2;
+        let currentGameState = null;
+
+        function setPlayerCount(count) {
+            selectedPlayerCount = count;
+            document.getElementById('playerCount').value = count;
+            
+            // Update button styles
+            document.querySelectorAll('.player-count-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+        }
+
+        function joinLobby() {
+            myUsername = document.getElementById('uname').value.trim();
+            myRoom = document.getElementById('rid').value.trim();
+
+            if(!myUsername || !myRoom) {
+                showNotification("Please enter both Name and Room ID", "error");
+                return;
+            }
+
+            // Transition UI
+            document.getElementById('lobby').style.display = 'none';
+            document.getElementById('game-container').style.display = 'block';
+            document.getElementById('chat-panel').style.display = 'flex';
+            
+            // Update chat room info
+            document.getElementById('chat-room-info').textContent = `Room: ${myRoom}`;
+
+            // Emit Join Event with selected player count
+            socket.emit('join_room', { 
+                room: myRoom, 
+                username: myUsername, 
+                playerCount: selectedPlayerCount 
+            });
+        }
+
+        function leaveGame() {
+            if (confirm("Are you sure you want to leave the game?")) {
+                location.reload();
+            }
+        }
+
+        function showGameRules() {
+            alert(
+                "🎮 COLOR WARS - GAME RULES\n\n" +
+                "1. FIRST MOVE: Click any empty cell to place 3 dots\n" +
+                "2. SUBSEQUENT MOVES: Click your own cells to add 1 dot\n" +
+                "3. EXPLOSIONS: When a cell reaches 4 dots:\n" +
+                "   - It resets to 0 dots\n" +
+                "   - Adjacent cells (up/down/left/right) become YOUR color\n" +
+                "   - Chain explosions can occur\n" +
+                "4. WIN: Last player with dots on the board wins!\n\n" +
+                "💡 TIP: Use explosions to capture opponent's cells!"
+            );
+        }
+
+        function sendMessage() {
+            const chatInput = document.getElementById('chat-input');
+            const message = chatInput.value.trim();
+            
+            if (!message) return;
+            
+            // Emit chat message
+            socket.emit('chat_message', {
+                room: myRoom,
+                message: message,
+                username: myUsername,
+                color: myColor
+            });
+            
+            // Clear input
+            chatInput.value = '';
+            chatInput.focus();
+        }
+
+        // Handle Enter key in chat
+        document.getElementById('chat-input').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+
+        function showNotification(message, type = "info") {
+            const notification = document.getElementById('notification');
+            notification.textContent = message;
+            notification.style.display = 'block';
+            notification.style.background = type === "error" ? '#ff4444' : 
+                                          type === "success" ? '#44ff44' : 
+                                          type === "warning" ? '#ffaa44' : 
+                                          '#16213e';
+            
+            setTimeout(() => {
+                notification.style.display = 'none';
+            }, 3000);
+        }
+
+        function isValidMove(r, c, state) {
+            if (!state || !state.started) return false;
+            
+            const currentPlayer = state.players[state.turn];
+            if (currentPlayer.id !== myPlayerId) return false;
+            
+            const cell = state.grid[r][c];
+            const playerColor = currentPlayer.color;
+            const isFirstMove = state.first_moves_done && !state.first_moves_done[playerColor];
+            
+            if (isFirstMove) {
+                // First move: can click on any empty cell
+                return cell.owner === null;
+            } else {
+                // Subsequent moves: can only click on own cells
+                return cell.owner === playerColor;
+            }
+        }
+
+        function addChatMessage(data, type = 'other') {
+            const chatMessages = document.getElementById('chat-messages');
+            const messageDiv = document.createElement('div');
+            
+            messageDiv.className = `message ${type}`;
+            
+            if (type === 'system') {
+                messageDiv.textContent = data.message;
+                messageDiv.classList.add('system');
+            } else {
+                messageDiv.innerHTML = `
+                    <div class="message-sender" style="color: ${data.color || '#aaa'}">
+                        ${data.username}
+                    </div>
+                    <div class="message-text">${data.message}</div>
+                `;
+                messageDiv.classList.add(type);
+            }
+            
+            chatMessages.appendChild(messageDiv);
+            
+            // Scroll to bottom
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        socket.on('connect', () => {
+            myPlayerId = socket.id;
+            console.log('Connected with ID:', myPlayerId);
+        });
+
+        socket.on('init_player', (data) => {
+            myColor = data.color;
+            showNotification(`You joined as ${myColor.toUpperCase()}`, "success");
+            
+            // Add welcome message to chat
+            addChatMessage({
+                message: `You joined the game as ${myColor}`,
+                username: 'System'
+            }, 'system');
+        });
+
+        socket.on('update_state', (state) => {
+            currentGameState = state;
+            const board = document.getElementById('board');
+            const turnDisplay = document.getElementById('turn-display');
+            const playerInfo = document.getElementById('player-info');
+            const roomInfo = document.getElementById('room-info');
+            const instructions = document.getElementById('player-instructions');
+            const rulesText = document.getElementById('rules-text');
+            
+            board.innerHTML = '';
+            
+            if (!state.started) {
+                turnDisplay.innerText = `Waiting for players...`;
+                turnDisplay.style.color = "white";
+                instructions.innerHTML = '';
+                rulesText.textContent = 'Waiting for players to join...';
+                
+                // Show room info
+                roomInfo.innerText = `Room: ${myRoom} | Players: ${state.players.length}/${state.max}`;
+                
+                // Show player list
+                let playerListHTML = '<div>Players in room:</div>';
+                state.players.forEach(player => {
+                    const isYou = player.id === myPlayerId;
+                    playerListHTML += 
+                        `<div class="player-item" style="background: ${player.color}; margin: 5px;">
+                            ${player.name} (${player.color}) ${isYou ? ' (You)' : ''}
+                        </div>`;
+                });
+                playerInfo.innerHTML = playerListHTML;
+                
+            } else {
+                // Game has started
+                const currentPlayer = state.players[state.turn];
+                const isMyTurn = currentPlayer.id === myPlayerId;
+                const isFirstMove = state.first_moves_done && !state.first_moves_done[currentPlayer.color];
+                
+                // Update turn display
+                turnDisplay.innerText = isMyTurn ? 
+                    `YOUR TURN (${currentPlayer.color.toUpperCase()})` : 
+                    `${currentPlayer.name}'s Turn (${currentPlayer.color})`;
+                turnDisplay.style.color = currentPlayer.color;
+                
+                if (isMyTurn) {
+                    turnDisplay.classList.add('turn-indicator');
+                    
+                    // Show instructions
+                    if (isFirstMove) {
+                        instructions.innerHTML = '<span class="first-move-indicator">FIRST MOVE: Click any empty cell to place 3 dots!</span>';
+                        rulesText.textContent = 'First move: Click ANY empty cell to get 3 dots!';
+                    } else {
+                        instructions.innerHTML = 'Click on your own cells to add dots (4 dots = EXPLODE!)';
+                        rulesText.textContent = 'Click YOUR cells to add dots. 4 dots = EXPLODE! Explosions CONVERT adjacent cells to your color.';
+                    }
+                } else {
+                    turnDisplay.classList.remove('turn-indicator');
+                    instructions.innerHTML = isFirstMove ? 
+                        `<span class="first-move-indicator">${currentPlayer.name} is making their first move</span>` :
+                        `Waiting for ${currentPlayer.name} to move`;
+                    rulesText.textContent = 'Explosions CONVERT adjacent cells to your color!';
+                }
+                
+                // Show room info
+                roomInfo.innerText = `Room: ${myRoom} | Turn: ${state.turn + 1}/${state.players.length}`;
+                
+                // Show all players with first move status
+                let playerListHTML = '';
+                state.players.forEach((player, index) => {
+                    const isCurrent = index === state.turn;
+                    const isYou = player.id === myPlayerId;
+                    const playerFirstMoveDone = state.first_moves_done[player.color];
+                    
+                    playerListHTML += 
+                        `<div class="player-item" style="background: ${player.color}; margin: 5px; ${isCurrent ? 'border: 2px solid white;' : ''}">
+                            ${isCurrent ? '→ ' : ''}${player.name} (${player.color}) 
+                            ${playerFirstMoveDone ? '✓' : '⏳'}
+                            ${isYou ? ' (You)' : ''}
+                        </div>`;
+                });
+                playerInfo.innerHTML = playerListHTML;
+            }
+
+            // Create Grid
+            state.grid.forEach((row, r) => {
+                row.forEach((cell, c) => {
+                    const cellDiv = document.createElement('div');
+                    
+                    // Apply base cell class
+                    cellDiv.className = 'cell';
+                    
+                    // Add color class if cell has an owner
+                    if (cell.owner) {
+                        cellDiv.classList.add(cell.owner);
+                    }
+                    
+                    // Highlight cells with 3 dots with BRIGHTER color
+                    if (cell.dots === 3) {
+                        cellDiv.classList.add('three-dots');
+                        cellDiv.classList.add('warning');
+                    }
+                    
+                    // Add your color highlight
+                    if (cell.owner === myColor) {
+                        cellDiv.classList.add('my-color');
+                    }
+                    
+                    // Determine if cell is clickable
+                    if (state.started) {
+                        const currentPlayer = state.players[state.turn];
+                        const isMyTurn = currentPlayer.id === myPlayerId;
+                        const isFirstMove = state.first_moves_done && !state.first_moves_done[currentPlayer.color];
+                        
+                        if (isMyTurn && isValidMove(r, c, state)) {
+                            cellDiv.classList.add('clickable');
+                            
+                            // Highlight first move cells specially
+                            if (isFirstMove && cell.owner === null) {
+                                cellDiv.classList.add('first-move');
+                            }
+                            
+                            cellDiv.onclick = () => {
+                                console.log(`Making move at row ${r}, col ${c}`);
+                                socket.emit('make_move', { 
+                                    room: myRoom, 
+                                    r: r, 
+                                    c: c 
+                                });
+                            };
+                        } else {
+                            cellDiv.classList.add('not-clickable');
+                            cellDiv.onclick = null;
+                        }
+                    } else {
+                        cellDiv.classList.add('not-clickable');
+                        cellDiv.onclick = null;
+                    }
+
+                    // Add dots inside cell
+                    for(let i = 0; i < cell.dots; i++) {
+                        const dot = document.createElement('div');
+                        dot.className = 'white-dot';
+                        cellDiv.appendChild(dot);
+                    }
+                    
+                    // Show dot count
+                    if (cell.dots > 0) {
+                        const countSpan = document.createElement('span');
+                        countSpan.className = 'dot-count';
+                        countSpan.textContent = cell.dots;
+                        cellDiv.appendChild(countSpan);
+                    }
+                    
+                    // Add explosion warning for cells with 3 dots
+                    if (cell.dots === 3) {
+                        const warningSpan = document.createElement('span');
+                        warningSpan.textContent = '⚠';
+                        warningSpan.style.position = 'absolute';
+                        warningSpan.style.top = '2px';
+                        warningSpan.style.left = '2px';
+                        warningSpan.style.fontSize = '10px';
+                        warningSpan.style.color = '#ff0000';
+                        warningSpan.style.fontWeight = 'bold';
+                        warningSpan.style.textShadow = '0 0 3px black';
+                        cellDiv.appendChild(warningSpan);
+                    }
+                    
+                    board.appendChild(cellDiv);
+                });
+            });
+        });
+
+        // Chat message handler
+        socket.on('chat_message', (data) => {
+            const isOwnMessage = data.username === myUsername;
+            addChatMessage(data, isOwnMessage ? 'own' : 'other');
+        });
+
+        // System messages
+        socket.on('player_joined', (data) => {
+            addChatMessage({
+                message: `${data.username} joined the game`,
+                username: 'System'
+            }, 'system');
+        });
+
+        socket.on('player_left', (data) => {
+            addChatMessage({
+                message: `${data.username} left the game`,
+                username: 'System'
+            }, 'system');
+        });
+
+        socket.on('game_over', (data) => {
+            addChatMessage({
+                message: `🎉 GAME OVER! Winner: ${data.winner}`,
+                username: 'System'
+            }, 'system');
+            
+            showNotification(`🎉 GAME OVER! Winner: ${data.winner}`, "success");
+            setTimeout(() => {
+                location.reload();
+            }, 5000);
+        });
+
+        socket.on('error', (data) => {
+            showNotification("Error: " + data.msg, "error");
+        });
+        
+        socket.on('connect_error', (error) => {
+            showNotification("Connection error. Please refresh the page.", "error");
+            console.error('Connection error:', error);
+        });
+    </script>
+</body>
+</html>
